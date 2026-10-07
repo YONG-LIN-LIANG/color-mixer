@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>家具修復調色練習器</title>
+  <title>調色練習器</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -455,6 +455,15 @@
       }
     }
 
+
+    /* Target LAB inputs */
+    .target-lab-field{display:flex;flex-wrap:wrap;gap:8px;align-items:center;width:100%}
+    .target-lab-group{display:inline-flex;align-items:center;gap:5px}
+    .target-lab-input{width:82px;padding:10px 8px;border:1px solid #ccc;border-radius:8px;font:inherit;font-family:ui-monospace,monospace}
+    .target-lab-input.invalid{border-color:#c62828;background:#fff3f3}
+    .target-lab-note{color:#777;font-size:12px}
+    @media(max-width:520px){.target-lab-field{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.target-lab-group{min-width:0}.target-lab-input{width:100%;min-width:0}.target-lab-note{grid-column:1/-1}}
+
 </style>
 </head>
 <body>
@@ -470,6 +479,13 @@
         <input id="targetPicker" type="color" value="#8b6248">
         <input id="targetHex" class="target-hex-input" value="#8B6248"
                aria-label="Target HEX">
+      </div>
+      <div class="target-lab-field">
+        <strong id="targetLabLabel">CIELAB：</strong>
+        <label class="target-lab-group">L* <input id="targetL" class="target-lab-input" type="number" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Target L star"></label>
+        <label class="target-lab-group">A* <input id="targetA" class="target-lab-input" type="number" step="0.01" inputmode="decimal" aria-label="Target a star"></label>
+        <label class="target-lab-group">B* <input id="targetB" class="target-lab-input" type="number" step="0.01" inputmode="decimal" aria-label="Target b star"></label>
+        <span id="targetLabNote" class="target-lab-note">LAB 與 HEX 會自動雙向同步</span>
       </div>
       <div class="target-field">
         <label for="targetTotalMl"><strong id="targetTotalLabel">目標總量：</strong></label>
@@ -553,7 +569,7 @@ let currentLanguage = localStorage.getItem("furnitureMixerLanguage") || "zh-TW";
 const i18n = {
   "zh-TW": {
     pageTitle:"調色練習器", appTitle:"🎨 調色練習器", subtitle:"使用紅、黃、藍、白、黑，盡量調出目標顏色。",
-    target:"Target：", targetTotal:"目標總量：", randomWood:"隨機木色", reset:"重新開始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
+    target:"Target：", targetLab:"CIELAB：", targetLabNote:"LAB 與 HEX 會自動雙向同步", targetTotal:"目標總量：", randomWood:"隨機木色", reset:"重新開始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"顏料比例", color:"顏色", name:"名稱", ratio:"比例", value:"數值", usage:"用量 (ml)", addPaint:"＋ 新增顏料",
     paintHelp:"可加入接近木色的現成顏料，可直接輸入 HEX 或使用色彩選擇器。",
     autoIntro:"Auto Mix 會搜尋目前所有顏料的非負比例（每種 ≥ 0%），以目前 App 的混色模型找出最高 Match 配方；若某色不需要，會顯示 0%。",
@@ -569,7 +585,7 @@ const i18n = {
   },
   "zh-CN": {
     pageTitle:"调色练习器", appTitle:"🎨 调色练习器", subtitle:"使用红、黄、蓝、白、黑，尽量调出目标色。",
-    target:"Target：", targetTotal:"目标总量：", randomWood:"随机木色", reset:"重新开始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
+    target:"Target：", targetLab:"CIELAB：", targetLabNote:"LAB 与 HEX 会自动双向同步", targetTotal:"目标总量：", randomWood:"随机木色", reset:"重新开始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"颜料比例", color:"颜色", name:"名称", ratio:"比例", value:"数值", usage:"用量 (ml)", addPaint:"＋ 新增颜料",
     paintHelp:"可加入接近木色的现成颜料，可直接输入 HEX 或使用色彩选择器。",
     autoIntro:"Auto Mix 会搜索目前所有颜料的非负比例（每种 ≥ 0%），以当前 App 的混色模型找出最高 Match 配方；若某色不需要，会显示 0%。",
@@ -583,7 +599,7 @@ const i18n = {
   },
   "en": {
     pageTitle:"Color Mixer", appTitle:"🎨 Color Mixer", subtitle:"Use red, yellow, blue, white and black to match the target color as closely as possible.",
-    target:"Target:", targetTotal:"Target volume:", randomWood:"Random wood color", reset:"Reset", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
+    target:"Target:", targetLab:"CIELAB:", targetLabNote:"LAB and HEX stay synchronized", targetTotal:"Target volume:", randomWood:"Random wood color", reset:"Reset", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"Paint Ratios", color:"Color", name:"Name", ratio:"Ratio", value:"Value", usage:"Amount (mL)", addPaint:"＋ Add Paint",
     paintHelp:"You can add a ready-made paint close to the wood color. Enter its HEX value directly or use the color picker.",
     autoIntro:"Auto Mix searches non-negative ratios for all current paints (each ≥ 0%) and uses this app’s mixing model to find the highest-match recipe. Unneeded colors are shown as 0%.",
@@ -604,7 +620,7 @@ function setLanguage(lang) {
   currentLanguage = lang; localStorage.setItem("furnitureMixerLanguage", lang);
   document.documentElement.lang = lang === "zh-TW" ? "zh-Hant" : (lang === "zh-CN" ? "zh-Hans" : "en");
   document.title = tr("pageTitle");
-  const map={appTitle:"appTitle",appSubtitle:"subtitle",targetLabel:"target",targetTotalLabel:"targetTotal",randomTargetBtn:"randomWood",resetMixBtn:"reset",targetSwatchLabel:"targetSwatch",mixSwatchLabel:"yourMix",matchLabel:"match",paintRatioTitle:"paintRatio",hdrColor:"color",hdrName:"name",hdrRatio:"ratio",hdrValue:"value",hdrUsage:"usage",addPaintBtn:"addPaint",paintHelp:"paintHelp",recommendedTitle:"recommendedTitle",addRecommendedBtn:"addRecommended"};
+  const map={appTitle:"appTitle",appSubtitle:"subtitle",targetLabel:"target",targetLabLabel:"targetLab",targetLabNote:"targetLabNote",targetTotalLabel:"targetTotal",randomTargetBtn:"randomWood",resetMixBtn:"reset",targetSwatchLabel:"targetSwatch",mixSwatchLabel:"yourMix",matchLabel:"match",paintRatioTitle:"paintRatio",hdrColor:"color",hdrName:"name",hdrRatio:"ratio",hdrValue:"value",hdrUsage:"usage",addPaintBtn:"addPaint",paintHelp:"paintHelp",recommendedTitle:"recommendedTitle",addRecommendedBtn:"addRecommended"};
   Object.entries(map).forEach(([id,key])=>{const el=document.getElementById(id);if(el)el.textContent=tr(key);});
   const mtl=document.getElementById("mobileTargetLabel"); if(mtl) mtl.textContent=tr("targetSwatch");
   const mml=document.getElementById("mobileMixLabel"); if(mml) mml.textContent=tr("yourMix");
@@ -896,6 +912,45 @@ function rgbToLab(r,g,b) {
     a:500*(x-y),
     b:200*(y-z)
   };
+}
+
+let targetLabOverride = null;
+
+function labToRgb(L,a,b) {
+  let y=(L+16)/116;
+  let x=a/500+y;
+  let z=y-b/200;
+  const invf=t=>{const t3=t*t*t; return t3>0.008856?t3:(t-16/116)/7.787;};
+  x=.95047*invf(x); y=invf(y); z=1.08883*invf(z);
+  let r=x*3.2406+y*(-1.5372)+z*(-0.4986);
+  let g=x*(-0.9689)+y*1.8758+z*0.0415;
+  let bl=x*0.0557+y*(-0.2040)+z*1.0570;
+  const gamma=c=>c<=0.0031308?12.92*c:1.055*Math.pow(Math.max(0,c),1/2.4)-0.055;
+  return {r:Math.max(0,Math.min(255,gamma(r)*255)),g:Math.max(0,Math.min(255,gamma(g)*255)),b:Math.max(0,Math.min(255,gamma(bl)*255))};
+}
+
+function syncLabInputs(lab) {
+  if(!lab) return;
+  const vals={targetL:lab.L,targetA:lab.a,targetB:lab.b};
+  Object.entries(vals).forEach(([id,v])=>{const el=document.getElementById(id);if(el){el.value=Number(v).toFixed(2);el.classList.remove("invalid");}});
+}
+
+function setTargetLabFromInputs() {
+  const L=parseFloat(document.getElementById("targetL").value);
+  const a=parseFloat(document.getElementById("targetA").value);
+  const b=parseFloat(document.getElementById("targetB").value);
+  const inputs=[document.getElementById("targetL"),document.getElementById("targetA"),document.getElementById("targetB")];
+  const valid=[L,a,b].every(Number.isFinite)&&L>=0&&L<=100;
+  inputs.forEach(el=>el.classList.toggle("invalid",!valid));
+  if(!valid) return false;
+  targetLabOverride={L,a,b};
+  const rgb=labToRgb(L,a,b);
+  const hex=rgbToHex(rgb.r,rgb.g,rgb.b).toUpperCase();
+  document.getElementById("targetHex").value=hex;
+  document.getElementById("targetHex").classList.remove("invalid");
+  document.getElementById("targetPicker").value=hex.toLowerCase();
+  update(hex,targetLabOverride);
+  return true;
 }
 
 function deltaE76(a,b) {
@@ -1245,7 +1300,7 @@ function autoMix() {
   // Yield once so the loading state paints before CPU work begins.
   setTimeout(() => {
     const target = hexToRgb(targetHex);
-    const targetLab = rgbToLab(target.r, target.g, target.b);
+    const targetLab = targetLabOverride || rgbToLab(target.r, target.g, target.b);
     const result = optimizeMix(targetLab);
 
     result.amounts.forEach((v, i) => paints[i].amount = v);
@@ -1287,12 +1342,13 @@ function setTargetHex(value, normalizeInput = false) {
 
   document.getElementById("targetPicker").value = hex.toLowerCase();
 
-  // Update all target-dependent UI immediately.
+  // HEX becomes the source of truth, so derive a fresh LAB value from it.
+  targetLabOverride = null;
   update(hex);
   return true;
 }
 
-function update(forcedTargetHex) {
+function update(forcedTargetHex, forcedTargetLab) {
 
   let targetHex = forcedTargetHex ||
     document.getElementById("targetHex")
@@ -1339,9 +1395,10 @@ function update(forcedTargetHex) {
     mix.r,mix.g,mix.b
   );
 
-  const targetLab=rgbToLab(
+  const targetLab = forcedTargetLab || targetLabOverride || rgbToLab(
     target.r,target.g,target.b
   );
+  syncLabInputs(targetLab);
 
   const mixLab=rgbToLab(
     mix.r,mix.g,mix.b
@@ -1420,7 +1477,7 @@ function randomTarget() {
   document.getElementById("targetHex")
     .value=hex;
 
-  update();
+  setTargetHex(hex, true);
 }
 
 function resetMix() {
@@ -1456,6 +1513,18 @@ targetHexInput.addEventListener("keydown", e => {
     setTargetHex(e.target.value, true);
     e.target.blur();
   }
+});
+
+
+["targetL","targetA","targetB"].forEach(id => {
+  const el=document.getElementById(id);
+  el.addEventListener("input", setTargetLabFromInputs);
+  el.addEventListener("change", () => {
+    if(setTargetLabFromInputs()) syncLabInputs(targetLabOverride);
+  });
+  el.addEventListener("keydown", e => {
+    if(e.key === "Enter") { e.preventDefault(); if(setTargetLabFromInputs()) { syncLabInputs(targetLabOverride); el.blur(); } }
+  });
 });
 
 controls.addEventListener("change", e => {
