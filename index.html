@@ -339,7 +339,123 @@
         width: 100%;
       }
     }
-  </style>
+
+    .mobile-live-preview{display:none}
+    @media(max-width:650px){
+      .mobile-live-preview{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:stretch;position:sticky;top:8px;z-index:1000;margin:0 0 12px;padding:8px;border:1px solid rgba(0,0,0,.08);border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 6px 22px rgba(0,0,0,.12);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+      .mobile-preview-label{display:block;margin-bottom:5px;font-size:11px;font-weight:800;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .mobile-preview-swatch{height:54px;border:1px solid rgba(0,0,0,.14);border-radius:10px}
+      .mobile-preview-hex{display:block;margin-top:4px;font-family:ui-monospace,monospace;font-size:11px;text-align:center}
+      .mobile-preview-score{min-width:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 6px;border-radius:10px;background:#f5f5f5}
+      .mobile-preview-score-label{font-size:10px;font-weight:700;color:#666} #mobileMatch{font-size:18px;font-weight:850;line-height:1.15}
+    }
+
+
+    @media(max-width:650px){
+      .desktop-compare-card,
+      .desktop-match-card{display:none !important}
+
+      .mobile-preview-details{
+        grid-column:1 / -1;
+        padding-top:8px;
+        border-top:1px solid rgba(0,0,0,.08);
+        font-size:12px;
+        line-height:1.4;
+      }
+      .mobile-preview-hint{
+        margin-top:5px;
+        padding:7px 8px;
+        border-radius:8px;
+        background:#f5f5f5;
+      }
+      .mobile-preview-volume{
+        margin-top:5px;
+        padding:7px 8px;
+        border-radius:8px;
+        background:#fff8e1;
+        color:#6d5200;
+      }
+      .mobile-preview-volume.ready{
+        background:#edf7ed;
+        color:#245b2a;
+      }
+    }
+
+  
+    /* RWD fix: keep the ratio slider and numeric input in separate grid areas */
+    @media (max-width: 820px) {
+      .paint {
+        grid-template-columns: 38px minmax(0, 1fr) 100px 40px;
+        grid-template-areas:
+          "color name hex remove"
+          "slider slider amount amount"
+          "ml ml ml ml";
+      }
+
+      .paint > .paint-color {
+        grid-area: color;
+      }
+
+      .paint > strong,
+      .paint > .paint-name-input {
+        grid-area: name;
+        min-width: 0;
+      }
+
+      .paint > .hex-input {
+        grid-area: hex;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .paint > .remove-paint {
+        grid-area: remove;
+      }
+
+      .paint > input[type="range"] {
+        grid-area: slider;
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+      }
+
+      .paint > .amount-input {
+        grid-area: amount;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .paint > .ml-output {
+        grid-area: ml;
+        justify-content: center;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .paint {
+        grid-template-columns: 36px minmax(0, 1fr) 92px 38px;
+        grid-template-areas:
+          "color name hex remove"
+          "slider slider amount amount"
+          "ml ml ml ml";
+      }
+    }
+
+    @media (max-width: 390px) {
+      .paint {
+        grid-template-columns: 34px minmax(0, 1fr) 82px 36px;
+        gap: 7px;
+      }
+
+      .paint > .hex-input,
+      .paint > .amount-input {
+        padding-left: 6px;
+        padding-right: 6px;
+        font-size: 13px;
+      }
+    }
+
+</style>
 </head>
 <body>
 <div class="app">
@@ -368,7 +484,18 @@
     </div>
   </div>
 
-  <div class="card compare">
+  <div id="mobileLivePreview" class="mobile-live-preview" aria-live="polite">
+    <div><span id="mobileTargetLabel" class="mobile-preview-label">🎯 Target</span><div id="mobileTargetSwatch" class="mobile-preview-swatch"></div><span id="mobileTargetHex" class="mobile-preview-hex"></span></div>
+    <div><span id="mobileMixLabel" class="mobile-preview-label">🧪 Your Mix</span><div id="mobileMixSwatch" class="mobile-preview-swatch"></div><span id="mobileMixHex" class="mobile-preview-hex"></span></div>
+    <div class="mobile-preview-score"><span id="mobileMatchLabel" class="mobile-preview-score-label">Match</span><span><span id="mobileMatch">0.0</span>%</span></div>
+    <div class="mobile-preview-details">
+      <div>ΔE76：<strong id="mobileDeltaE">0</strong></div>
+      <div id="mobileHint" class="mobile-preview-hint"></div>
+      <div id="mobileMatchVolumeNotice" class="mobile-preview-volume" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="card compare desktop-compare-card">
     <div>
       <div id="targetSwatchLabel" class="label">🎯 Target</div>
       <div id="targetSwatch" class="swatch"></div>
@@ -381,7 +508,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card desktop-match-card">
     <div class="score">
       <span id="matchLabel">Match</span>：<span id="match">0</span>%
     </div>
@@ -425,7 +552,7 @@ let currentLanguage = localStorage.getItem("furnitureMixerLanguage") || "zh-TW";
 
 const i18n = {
   "zh-TW": {
-    pageTitle:"家具修復調色練習器", appTitle:"🎨 家具修復調色練習器", subtitle:"使用紅、黃、藍、白、黑，盡量調出目標木色。",
+    pageTitle:"調色練習器", appTitle:"🎨 調色練習器", subtitle:"使用紅、黃、藍、白、黑，盡量調出目標顏色。",
     target:"Target：", targetTotal:"目標總量：", randomWood:"隨機木色", reset:"重新開始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"顏料比例", color:"顏色", name:"名稱", ratio:"比例", value:"數值", usage:"用量 (ml)", addPaint:"＋ 新增顏料",
     paintHelp:"可加入接近木色的現成顏料，可直接輸入 HEX 或使用色彩選擇器。",
@@ -441,7 +568,7 @@ const i18n = {
     recAdded:(n,h)=>`${n} ${h} 已加入顏料庫（0.0%）。請再次按 Auto Mix，程式會把它一起納入計算。`, invalidTarget:"請先輸入有效的 Target HEX。", calculating:"Auto Mix 計算中…", complete:(m,de,u)=>`Auto Mix 完成：Match ${m}%，ΔE76 ${de}。${u}`
   },
   "zh-CN": {
-    pageTitle:"家具修复调色练习器", appTitle:"🎨 家具修复调色练习器", subtitle:"使用红、黄、蓝、白、黑，尽量调出目标木色。",
+    pageTitle:"调色练习器", appTitle:"🎨 调色练习器", subtitle:"使用红、黄、蓝、白、黑，尽量调出目标色。",
     target:"Target：", targetTotal:"目标总量：", randomWood:"随机木色", reset:"重新开始", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"颜料比例", color:"颜色", name:"名称", ratio:"比例", value:"数值", usage:"用量 (ml)", addPaint:"＋ 新增颜料",
     paintHelp:"可加入接近木色的现成颜料，可直接输入 HEX 或使用色彩选择器。",
@@ -455,7 +582,7 @@ const i18n = {
     recReason:(m,h)=>`目前颜料库最佳 Match 为 ${m}%。建议寻找接近 ${h} 的实体颜料作为修正色，加入后再按 Auto Mix。这是按当前数学混色模型计算的修正方向，不代表特定品牌实体颜料一定完全相同。`, recAdded:(n,h)=>`${n} ${h} 已加入颜料库（0.0%）。请再次按 Auto Mix，程序会把它一起纳入计算。`, invalidTarget:"请先输入有效的 Target HEX。", calculating:"Auto Mix 计算中…", complete:(m,de,u)=>`Auto Mix 完成：Match ${m}%，ΔE76 ${de}。${u}`
   },
   "en": {
-    pageTitle:"Furniture Restoration Color Mixer", appTitle:"🎨 Furniture Restoration Color Mixer", subtitle:"Use red, yellow, blue, white and black to match the target wood color as closely as possible.",
+    pageTitle:"Color Mixer", appTitle:"🎨 Color Mixer", subtitle:"Use red, yellow, blue, white and black to match the target color as closely as possible.",
     target:"Target:", targetTotal:"Target volume:", randomWood:"Random wood color", reset:"Reset", targetSwatch:"🎯 Target", yourMix:"🧪 Your Mix", match:"Match",
     paintRatio:"Paint Ratios", color:"Color", name:"Name", ratio:"Ratio", value:"Value", usage:"Amount (mL)", addPaint:"＋ Add Paint",
     paintHelp:"You can add a ready-made paint close to the wood color. Enter its HEX value directly or use the color picker.",
@@ -479,6 +606,9 @@ function setLanguage(lang) {
   document.title = tr("pageTitle");
   const map={appTitle:"appTitle",appSubtitle:"subtitle",targetLabel:"target",targetTotalLabel:"targetTotal",randomTargetBtn:"randomWood",resetMixBtn:"reset",targetSwatchLabel:"targetSwatch",mixSwatchLabel:"yourMix",matchLabel:"match",paintRatioTitle:"paintRatio",hdrColor:"color",hdrName:"name",hdrRatio:"ratio",hdrValue:"value",hdrUsage:"usage",addPaintBtn:"addPaint",paintHelp:"paintHelp",recommendedTitle:"recommendedTitle",addRecommendedBtn:"addRecommended"};
   Object.entries(map).forEach(([id,key])=>{const el=document.getElementById(id);if(el)el.textContent=tr(key);});
+  const mtl=document.getElementById("mobileTargetLabel"); if(mtl) mtl.textContent=tr("targetSwatch");
+  const mml=document.getElementById("mobileMixLabel"); if(mml) mml.textContent=tr("yourMix");
+  const mchl=document.getElementById("mobileMatchLabel"); if(mchl) mchl.textContent=tr("match");
   document.querySelectorAll(".language-bar button").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
   paints.forEach((p,i)=>{ if(p.base) p.name=basePaintName(i); });
   buildControls(); update();
@@ -1196,6 +1326,11 @@ function update(forcedTargetHex) {
   document.getElementById("mixSwatch")
     .style.background=mixHex;
 
+  const mts=document.getElementById("mobileTargetSwatch"), mms=document.getElementById("mobileMixSwatch");
+  const mth=document.getElementById("mobileTargetHex"), mmh=document.getElementById("mobileMixHex");
+  if(mts) mts.style.background=targetHex; if(mms) mms.style.background=mixHex;
+  if(mth) mth.textContent=targetHex; if(mmh) mmh.textContent=mixHex;
+
   const th=rgbToHsv(
     target.r,target.g,target.b
   );
@@ -1232,6 +1367,8 @@ function update(forcedTargetHex) {
 
   document.getElementById("deltaE")
     .textContent=de.toFixed(2);
+  const mobileDeltaE=document.getElementById("mobileDeltaE");
+  if(mobileDeltaE) mobileDeltaE.textContent=de.toFixed(2);
 
   /*
     這裡 Match 是遊戲分數，
@@ -1242,13 +1379,21 @@ function update(forcedTargetHex) {
 
   document.getElementById("match")
     .textContent=match.toFixed(1);
+  const mobileMatch=document.getElementById("mobileMatch"); if(mobileMatch) mobileMatch.textContent=match.toFixed(1);
 
   updateVolumeBreakdown(match);
 
-  document.getElementById("hint")
-    .textContent=makeHint(
-      targetLab,mixLab
-    );
+  const desktopVolumeNotice=document.getElementById("matchVolumeNotice");
+  const mobileVolumeNotice=document.getElementById("mobileMatchVolumeNotice");
+  if(desktopVolumeNotice && mobileVolumeNotice){
+    mobileVolumeNotice.textContent=desktopVolumeNotice.textContent;
+    mobileVolumeNotice.classList.toggle("ready",desktopVolumeNotice.classList.contains("ready"));
+  }
+
+  const hintText=makeHint(targetLab,mixLab);
+  document.getElementById("hint").textContent=hintText;
+  const mobileHint=document.getElementById("mobileHint");
+  if(mobileHint) mobileHint.textContent=hintText;
 }
 
 function randomTarget() {
@@ -1322,6 +1467,12 @@ controls.addEventListener("change", e => {
 document.getElementById("targetTotalMl").addEventListener("input", () => {
   const matchValue = parseFloat(document.getElementById("match").textContent) || 0;
   updateVolumeBreakdown(matchValue);
+  const desktopVolumeNotice=document.getElementById("matchVolumeNotice");
+  const mobileVolumeNotice=document.getElementById("mobileMatchVolumeNotice");
+  if(desktopVolumeNotice && mobileVolumeNotice){
+    mobileVolumeNotice.textContent=desktopVolumeNotice.textContent;
+    mobileVolumeNotice.classList.toggle("ready",desktopVolumeNotice.classList.contains("ready"));
+  }
 });
 
 setLanguage(currentLanguage);
