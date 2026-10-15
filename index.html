@@ -1637,7 +1637,7 @@ function sample(ctx,w,h,pos){const x=Math.round(pos.x*(w-1)),y=Math.round(pos.y*
 function simulate(base,paint,weight){const x=hexToRgb(base),y=hexToRgb(paint);return {r:255*Math.exp((1-weight)*Math.log(Math.max(x.r/255,.001))+weight*Math.log(Math.max(y.r/255,.001))),g:255*Math.exp((1-weight)*Math.log(Math.max(x.g/255,.001))+weight*Math.log(Math.max(y.g/255,.001))),b:255*Math.exp((1-weight)*Math.log(Math.max(x.b/255,.001))+weight*Math.log(Math.max(y.b/255,.001)))};}
 function display(){if(livePaint&&!paintCapture){$('livePaintChip').style.background=livePaint.hex;$('livePaintHex').textContent=livePaint.hex;}if(target){$('liveTargetChip').style.background=target.hex;$('liveTargetHex').textContent=target.hex;}if(mix){$('liveMixChip').style.background=mix.hex;$('liveMixHex').textContent=mix.hex;}if(!target||!mix)return;const de=deltaE76(target.lab,mix.lab);$('liveDelta').textContent=`ΔE76 ${de.toFixed(2)} (${tr("cameraEstimate")})`;const dl=target.lab.L-mix.lab.L,da=target.lab.a-mix.lab.a,db=target.lab.b-mix.lab.b;$('liveDirection').textContent=`${tr("direction")}${Math.abs(dl)<2?tr("brightnessClose"):dl>0?tr("needLighter"):tr("needDarker")}; ${Math.abs(da)<2?tr("rgClose"):da>0?tr("needRedder"):tr("needGreener")}; ${Math.abs(db)<2?tr("ybClose"):db>0?tr("needYellower"):tr("needBluer")}.`;
 const suggestions=[];for(const p of paints){if(!/^#[0-9a-f]{6}$/i.test(p.hex))continue;let best=null;for(const pct of [.01,.02,.05,.1,.2,.3]){const rgb=simulate(mix.hex,p.hex,pct),lab=rgbToLab(rgb.r,rgb.g,rgb.b),err=deltaE76(target.lab,lab);if(!best||err<best.err)best={pct,err};}if(best&&best.err<de-.1)suggestions.push({name:p.name,hex:p.hex,...best});}suggestions.sort((a,b)=>a.err-b.err);$('liveSuggestion').innerHTML='';const lead=document.createElement('strong');lead.textContent=suggestions.length?tr('paintSuggestions'):tr('noSuggestions');$('liveSuggestion').append(lead);suggestions.slice(0,4).forEach((p,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px';const chip=document.createElement('span');chip.style.cssText='width:23px;height:23px;border-radius:5px;border:1px solid #bbb;flex-shrink:0';chip.style.background=p.hex;const label=document.createElement('span');label.textContent=`${i+1}. ${p.name} · ${tr("tryAdd")}${(p.pct*100).toFixed(0)}% (${tr("simulated")} ${p.err.toFixed(2)})`;row.append(chip,label);$('liveSuggestion').append(row);});}
-function geometry(){const r=video.getBoundingClientRect(),w=video.videoWidth,h=video.videoHeight;if(!w||!h||!r.width||!r.height)return null;const scale=Math.min(r.width/w,r.height/h);return {r,left:(r.width-w*scale)/2,top:(r.height-h*scale)/2,dw:w*scale,dh:h*scale};}
+function geometry(){const r=video.getBoundingClientRect(),w=video.videoWidth,h=video.videoHeight;if(!w||!h||!r.width||!r.height)return null;const fit=getComputedStyle(video).objectFit;const scale=fit==='cover'?Math.max(r.width/w,r.height/h):Math.min(r.width/w,r.height/h);return {r,left:(r.width-w*scale)/2,top:(r.height-h*scale)/2,dw:w*scale,dh:h*scale};}
 function pointAt(e){const g=geometry();if(!g)return null;const x=(e.clientX-g.r.left-g.left)/g.dw,y=(e.clientY-g.r.top-g.top)/g.dh;return {x:Math.max(0,Math.min(1,x)),y:Math.max(0,Math.min(1,y))};}
 function draw(){const g=geometry();if(!g)return;const ratio=window.devicePixelRatio||1;overlay.width=Math.round(g.r.width*ratio);overlay.height=Math.round(g.r.height*ratio);const o=overlay.getContext('2d');o.scale(ratio,ratio);o.strokeStyle='rgba(255,255,255,.85)';o.lineWidth=2;o.setLineDash([7,5]);const mid=g.left+g.dw/2;o.beginPath();o.moveTo(mid,g.top);o.lineTo(mid,g.top+g.dh);o.stroke();o.setLineDash([]);for(const [k,pos] of Object.entries(positions)){const x=g.left+pos.x*g.dw,y=g.top+pos.y*g.dh;o.beginPath();o.arc(x,y,15,0,Math.PI*2);o.fillStyle='rgba(0,0,0,.25)';o.fill();o.lineWidth=3;o.strokeStyle=k==='target'?'#00f5d4':k==='mix'?'#ffb703':'#c084fc';o.stroke();o.fillStyle=o.strokeStyle;o.font='bold 12px system-ui';o.fillText(k==='target'?'T':k==='mix'?'M':'P',x+20,y+4);}}
 function frame(ts){raf=requestAnimationFrame(frame);if(ts-last<250||!video.videoWidth)return;last=ts;const c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,0,0,c.width,c.height);if(!locked.target)target=sample(ctx,c.width,c.height,positions.target);if(!locked.mix)mix=sample(ctx,c.width,c.height,positions.mix);if(!paintCapture)livePaint=sample(ctx,c.width,c.height,positions.paint);display();draw();}
@@ -1769,5 +1769,34 @@ body.practice-mode #paintDrawer,body.practice-mode #paintDrawerBackdrop{display:
 })();
 </script>
 
+
+<style id="restoreLabCameraCoverFix">
+/* On phones, fill the preview instead of letterboxing the camera feed.
+   The source is cropped rather than stretched. Sampling coordinates and
+   the overlay use the same cover transform. */
+@media (max-width:650px) {
+  body.camera-mode #liveCompareCard .live-stage {
+    aspect-ratio: 3 / 4;
+    width:100%;
+    min-height:0;
+    overflow:hidden;
+  }
+  body.camera-mode #liveCompareCard .live-stage video {
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    max-height:none;
+    object-fit:cover;
+    object-position:center center;
+  }
+  body.camera-mode #liveCompareCard .live-stage canvas {
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+  }
+}
+</style>
 </body>
 </html>
