@@ -614,7 +614,7 @@ const i18n = {
 };
 
 function tr(key, ...args) { const v = i18n[currentLanguage]?.[key] ?? i18n["zh-TW"][key] ?? key; return typeof v === "function" ? v(...args) : v; }
-function basePaintName(index) { return [tr("red"),tr("yellow"),tr("blue"),tr("white"),tr("black")][index] || paints[index]?.name || ""; }
+function basePaintName(p) { const key=p.baseKey || ({Red:"red",Yellow:"yellow",Blue:"blue",White:"white",Black:"black"}[p.name]); return key ? tr(key) : p.name; }
 function setLanguage(lang) {
   if (!i18n[lang]) return;
   currentLanguage = lang; localStorage.setItem("furnitureMixerLanguage", lang);
@@ -626,18 +626,18 @@ function setLanguage(lang) {
   const mml=document.getElementById("mobileMixLabel"); if(mml) mml.textContent=tr("yourMix");
   const mchl=document.getElementById("mobileMatchLabel"); if(mchl) mchl.textContent=tr("match");
   document.querySelectorAll(".language-bar button").forEach(b=>b.classList.toggle("active",b.dataset.lang===lang));
-  paints.forEach((p,i)=>{ if(p.base) p.name=basePaintName(i); });
+  paints.forEach(p=>{ if(p.base) p.name=basePaintName(p); });
   buildControls(); update();
   const status=document.getElementById("autoMixStatus"); if(status){status.classList.remove("success");status.textContent=tr("autoIntro");}
   const panel=document.getElementById("recommendedPaintPanel"); if(panel) panel.hidden=true;
 }
 
 const paints = [
-  {name:"Red", hex:"#D62828", amount:20, base:true},
-  {name:"Yellow", hex:"#F6BD32", amount:45, base:true},
-  {name:"Blue", hex:"#244A8F", amount:5, base:true},
-  {name:"White", hex:"#FFFFFF", amount:20, base:true},
-  {name:"Black", hex:"#111111", amount:10, base:true}
+  {name:"Red", baseKey:"red", hex:"#D62828", amount:20, base:true},
+  {name:"Yellow", baseKey:"yellow", hex:"#F6BD32", amount:45, base:true},
+  {name:"Blue", baseKey:"blue", hex:"#244A8F", amount:5, base:true},
+  {name:"White", baseKey:"white", hex:"#FFFFFF", amount:20, base:true},
+  {name:"Black", baseKey:"black", hex:"#111111", amount:10, base:true}
 ];
 
 const controls = document.getElementById("controls");
@@ -678,8 +678,8 @@ function buildControls() {
              value="${Number(p.amount).toFixed(1)}"
              oninput="setAmount(${i},this.value, 'input')">
       <span id="ml${i}" class="ml-output locked" title="${tr("unlockTitle")}">—</span>
-      <button class="remove-paint" ${p.base ? 'disabled' : ''}
-              title="${p.base ? tr('baseNoDelete') : tr('deletePaint')}"
+      <button class="remove-paint"
+              title="${tr('deletePaint')}"
               onclick="removePaint(${i})">×</button>
     `;
 
@@ -713,7 +713,7 @@ function addPaint() {
 }
 
 function removePaint(i) {
-  if (paints[i]?.base) return;
+  if (!paints[i]) return;
   paints.splice(i, 1);
   buildControls();
   update();
@@ -1545,6 +1545,119 @@ document.getElementById("targetTotalMl").addEventListener("input", () => {
 });
 
 setLanguage(currentLanguage);
+</script>
+
+<style>
+.camera-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.camera-toolbar button{background:#eae6e0}.camera-panel{position:fixed;inset:0;background:#000b;z-index:3000;display:none;align-items:center;justify-content:center;padding:12px}.camera-panel.open{display:flex}.camera-dialog{background:#fff;border-radius:16px;padding:16px;width:min(560px,100%);max-height:95vh;overflow:auto}.camera-stage{position:relative;background:#151515;border-radius:12px;overflow:hidden;min-height:180px}.camera-stage video,.camera-stage img{width:100%;max-height:55vh;object-fit:contain;display:block}.camera-reticle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34px;height:34px;border:2px solid #fff;box-shadow:0 0 0 1px #000;border-radius:50%;pointer-events:none}.camera-status{font-size:13px;color:#555;margin:8px 0}.saved-color-list{display:grid;gap:8px;margin-top:10px}.saved-color-item{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border:1px solid #ddd;border-radius:9px}.saved-color-chip{width:30px;height:30px;border:1px solid #ccc;border-radius:6px}.camera-select{padding:8px;max-width:100%;border:1px solid #ccc;border-radius:8px}.measured-chip{width:42px;height:42px;border:1px solid #ccc;border-radius:8px;display:inline-block;vertical-align:middle;margin-right:8px}
+</style>
+<div class="card" id="cameraFeatures">
+ <h2 id="cameraHeading">📷 相機取色與實測顏料庫</h2>
+ <p id="cameraIntro" style="color:#666;font-size:14px">可拍攝 Target、實體混合色或任一顏料；拍攝結果不會取代 Auto Mix 的模擬計算。</p>
+ <div class="camera-toolbar"><button type="button" id="camTarget">📷 Target</button><button type="button" id="camCurrent">📷 Current Mix</button><button type="button" id="camPaint">📷 Paint</button><button type="button" id="camExport">⬇ Export JSON</button><label style="padding:10px;background:#eee;border-radius:10px;cursor:pointer">⬆ Import JSON<input id="camImport" type="file" accept="application/json" hidden></label></div>
+ <div id="measuredResult" class="hint">尚未測量實際混合顏色。</div>
+ <h3 id="savedHeading">已保存的顏料取色紀錄</h3><div id="savedColors" class="saved-color-list"></div>
+ <p style="font-size:12px;color:#777">取樣 HEX/LAB 為相機影像估計值；不同光線、曝光和白平衡會造成誤差。資料保存在此瀏覽器，請定期匯出備份。</p>
+</div>
+<div id="cameraPanel" class="camera-panel" role="dialog" aria-modal="true" aria-label="Camera color picker">
+ <div class="camera-dialog">
+  <div class="row" style="justify-content:space-between"><strong id="cameraTitle">相機取色</strong><button type="button" id="cameraClose">✕</button></div>
+  <div class="camera-stage" id="cameraStage"><video id="cameraVideo" autoplay muted playsinline></video><img id="cameraImage" alt="Uploaded image" style="display:none"><div class="camera-reticle"></div></div>
+  <div class="camera-status" id="cameraStatus">點擊畫面選擇取樣位置，或使用中央取樣點。</div>
+  <div class="row"><span id="cameraChip" class="measured-chip"></span><strong id="cameraHex">—</strong><span id="cameraLab" style="font-size:12px"></span></div>
+  <div class="row" style="margin-top:10px"><button type="button" id="cameraStart" class="primary">啟動相機</button><label class="secondary" style="padding:10px;border-radius:10px;cursor:pointer">從照片取色<input type="file" id="cameraUpload" accept="image/*" hidden></label><button type="button" id="cameraCapture">重新取樣</button></div>
+  <div class="row" style="margin-top:10px"><label>名稱 <input id="cameraName" placeholder="顏料名稱" style="padding:8px;max-width:150px"></label><label>顏料 <select id="cameraPaintSelect" class="camera-select"></select></label></div>
+  <div class="row" style="margin-top:12px"><button type="button" class="primary" id="cameraSave">使用並保存顏色</button></div>
+ </div>
+</div>
+<script>
+(()=>{
+ const $=id=>document.getElementById(id);
+ const storeKey='restoreLabCameraColorsV1';
+ let records=[], measured=null, mode='target', stream=null, sample=null, imageMode=false, clickPos=null;
+ try{records=JSON.parse(localStorage.getItem(storeKey)||'[]');if(!Array.isArray(records))records=[];}catch(e){records=[];}
+ const stage=$('cameraStage'),video=$('cameraVideo'),img=$('cameraImage');
+ const lang=()=>currentLanguage;
+ const t=(zh,en,cn=zh)=>lang()==='en'?en:lang()==='zh-CN'?cn:zh;
+ const saveRecords=()=>{try{localStorage.setItem(storeKey,JSON.stringify(records));}catch(e){alert(t('儲存空間不足，請匯出資料','Storage is full. Export your data.'));}};
+ const fmt=lab=>`L* ${lab.L.toFixed(2)} / a* ${lab.a.toFixed(2)} / b* ${lab.b.toFixed(2)}`;
+ function paintOptions(){const sel=$('cameraPaintSelect');sel.innerHTML='';paints.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p.name;sel.appendChild(o);});}
+ function stop(){if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}}
+ function close(){stop();$('cameraPanel').classList.remove('open');}
+ async function start(){stop();imageMode=false;img.style.display='none';video.style.display='block';clickPos=null;try{if(!navigator.mediaDevices?.getUserMedia)throw Error('HTTPS / browser camera unavailable');stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;await video.play();$('cameraStatus').textContent=t('相機已啟動，點選畫面或按重新取樣','Camera ready. Tap image or sample center.');sampleColor();}catch(e){$('cameraStatus').textContent=t('無法啟動相機：','Cannot start camera: ')+e.message;}}
+ function open(m,i){mode=m;paintOptions();if(i!=null)$('cameraPaintSelect').value=i;$('cameraPaintSelect').parentElement.style.display=m==='paint'?'':'none';$('cameraName').value=m==='paint'?(paints[Number($('cameraPaintSelect').value)]?.name||''):m==='current'?'Current Mix':'Target';$('cameraTitle').textContent=t('相機取色 — ','Camera color — ')+m;sample=null;clickPos=null;$('cameraPanel').classList.add('open');$('cameraStatus').textContent=t('按啟動相機，或從照片取色','Start camera or choose a photo');}
+ function sampleColor(){const source=imageMode?img:video;const w=imageMode?img.naturalWidth:video.videoWidth,h=imageMode?img.naturalHeight:video.videoHeight;if(!w||!h)return;const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d',{willReadFrequently:true});try{ctx.drawImage(source,0,0,w,h);}catch(e){return;}
+ const x=Math.max(0,Math.min(w-1,Math.round((clickPos?.x??.5)*w))),y=Math.max(0,Math.min(h-1,Math.round((clickPos?.y??.5)*h)));
+ const radius=Math.max(2,Math.round(Math.min(w,h)*.012)),sx=Math.max(0,x-radius),sy=Math.max(0,y-radius),sw=Math.min(w-sx,radius*2+1),sh=Math.min(h-sy,radius*2+1);let data;try{data=ctx.getImageData(sx,sy,sw,sh).data;}catch(e){$('cameraStatus').textContent=e.message;return;}
+ const channels=[[],[],[]];for(let k=0;k<data.length;k+=4){if(data[k+3]<250)continue;for(let j=0;j<3;j++)channels[j].push(data[k+j]);}
+ if(!channels[0].length)return;const med=a=>{a.sort((a,b)=>a-b);return a[Math.floor(a.length/2)];};const rgb=channels.map(med);const hex=rgbToHex(...rgb).toUpperCase();sample={hex,lab:rgbToLab(...rgb)};$('cameraHex').textContent=hex;$('cameraChip').style.background=hex;$('cameraLab').textContent=fmt(sample.lab);
+ }
+ stage.addEventListener('click',e=>{const el=imageMode?img:video;const r=el.getBoundingClientRect();if(!r.width||!r.height)return; // contain-letterbox mapping
+ const w=imageMode?img.naturalWidth:video.videoWidth,h=imageMode?img.naturalHeight:video.videoHeight;if(!w||!h)return;const scale=Math.min(r.width/w,r.height/h),dw=w*scale,dh=h*scale;const left=r.left+(r.width-dw)/2,top=r.top+(r.height-dh)/2;clickPos={x:Math.max(0,Math.min(1,(e.clientX-left)/dw)),y:Math.max(0,Math.min(1,(e.clientY-top)/dh))};stage.querySelector('.camera-reticle').style.left=`${(left-r.left+clickPos.x*dw)/r.width*100}%`;stage.querySelector('.camera-reticle').style.top=`${(top-r.top+clickPos.y*dh)/r.height*100}%`;sampleColor();});
+ $('cameraStart').onclick=start;$('cameraClose').onclick=close;$('cameraCapture').onclick=sampleColor;$('camTarget').onclick=()=>open('target');$('camCurrent').onclick=()=>open('current');$('camPaint').onclick=()=>open('paint');
+ $('cameraPaintSelect').onchange=()=>{$('cameraName').value=paints[Number($('cameraPaintSelect').value)]?.name||'';};
+ $('cameraUpload').onchange=e=>{const f=e.target.files?.[0];if(!f)return;stop();const u=URL.createObjectURL(f);img.onload=()=>{URL.revokeObjectURL(u);imageMode=true;video.style.display='none';img.style.display='block';clickPos=null;sampleColor();};img.src=u;e.target.value='';};
+ function apply(r,m,index){if(m==='target'){setTargetHex(r.hex,true);}else if(m==='paint'){if(!paints[index]){addPaint();index=paints.length-1;}paints[index].name=r.name||paints[index].name;paints[index].hex=r.hex;buildControls();update();}else{measured=r;renderMeasured();}}
+ function renderMeasured(){const el=$('measuredResult');if(!measured){el.textContent=t('尚未測量實際混合顏色。','No physical mix measured yet.');return;}const target=targetLabOverride||rgbToLab(...Object.values(hexToRgb($('targetHex').value)));const de=deltaE76(target,measured.lab);el.innerHTML='';const chip=document.createElement('span');chip.className='measured-chip';chip.style.background=measured.hex;el.append(chip,document.createTextNode(` ${t('實測混合色','Measured mix')} ${measured.hex} | ΔE76 ${de.toFixed(2)} | ${fmt(measured.lab)}`));}
+ $('cameraSave').onclick=()=>{if(!sample){$('cameraStatus').textContent=t('請先完成取色','Sample a color first');return;}const idx=Number($('cameraPaintSelect').value),name=$('cameraName').value.trim()||mode;const r={id:Date.now()+'-'+Math.random().toString(36).slice(2,7),name,hex:sample.hex,lab:sample.lab,kind:mode,created:new Date().toISOString()};records.unshift(r);saveRecords();apply(r,mode,idx);renderRecords();close();};
+ function renderRecords(){const el=$('savedColors');el.innerHTML='';if(!records.length){el.textContent=t('尚無保存紀錄','No saved colors');return;}records.forEach(r=>{const row=document.createElement('div');row.className='saved-color-item';const chip=document.createElement('span');chip.className='saved-color-chip';chip.style.background=r.hex;const label=document.createElement('span');label.style.flex='1';label.style.minWidth='140px';label.textContent=`${r.name} · ${r.hex} · ${r.kind}`;const use=document.createElement('button');use.textContent=t('套用','Apply');use.onclick=()=>{const m=confirm(t('套用到 Target？按取消可套用到 Current Mix。','Apply to Target? Cancel to apply to Current Mix.'))?'target':'current';apply(r,m);};const del=document.createElement('button');del.textContent='×';del.onclick=()=>{records=records.filter(x=>x.id!==r.id);saveRecords();renderRecords();};row.append(chip,label,use,del);el.append(row);});}
+ $('camExport').onclick=()=>{const blob=new Blob([JSON.stringify({version:1,records},null,2)],{type:'application/json'});const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='restore-lab-colors.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
+ $('camImport').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{const v=JSON.parse(await f.text());if(!Array.isArray(v.records))throw Error('Invalid file');const valid=v.records.filter(r=>/^#[0-9A-Fa-f]{6}$/.test(r.hex)&&r.lab&&[r.lab.L,r.lab.a,r.lab.b].every(Number.isFinite));records=[...valid,...records];saveRecords();renderRecords();}catch(err){alert(err.message);}e.target.value='';};
+ const obs=new MutationObserver(()=>{if(measured)renderMeasured();});obs.observe($('targetHex'),{attributes:true,attributeFilter:['value']});$('targetHex').addEventListener('input',()=>{if(measured)renderMeasured();});
+ renderRecords();renderMeasured();
+})();
+</script>
+
+<style>
+#modeTabs{display:flex;gap:8px;margin:0 0 15px}#modeTabs button{flex:1;background:#eae6e0;color:#333}#modeTabs button.active{background:#222;color:#fff}
+body.camera-mode .practice-only,body.camera-mode #cameraFeatures{display:none!important}body.practice-mode #liveCompareCard,body.practice-mode #cameraFeatures{display:none!important}
+#liveCompareCard .live-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}#liveCompareCard .live-stage{position:relative;background:#171717;border-radius:12px;overflow:hidden;touch-action:none;user-select:none}#liveCompareCard video{width:100%;max-height:60vh;object-fit:contain;display:block;pointer-events:none}#liveCompareCard canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}#liveCompareCard .live-swatch{height:48px;border-radius:9px;border:1px solid #ccc}#liveCompareCard .live-marker{font-size:13px;color:#555}#liveCompareCard .live-result{padding:12px;background:#f5f5f5;border-radius:10px;margin-top:12px}#liveCompareCard button{margin:3px}#liveCompareCard button.is-locked{background:#dcefe4;color:#165a38}@media(max-width:650px){#liveCompareCard .live-swatch{height:38px}}
+</style>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const tabs=document.createElement('div');tabs.id='modeTabs';tabs.innerHTML='<button type="button" id="tabCamera">📹 即時相機取色</button><button type="button" id="tabPractice">🎨 練習調色</button>';
+const anchor=document.querySelector('.target-card');anchor.parentNode.insertBefore(tabs,anchor);
+for(const el of document.querySelectorAll('.app > .card,.app > .mobile-live-preview')){if(el.id!=='liveCompareCard')el.classList.add('practice-only');}
+const root=document.createElement('div');root.id='liveCompareCard';root.className='card';
+root.innerHTML=`<h2>📹 Live Target / Your Mix</h2><p style="font-size:13px;color:#666">拖曳青綠色與橙色圓圈選擇取色位置。中央分隔線區分 Target 與 Your Mix。可分別鎖定色票；解鎖後才會繼續即時更新。</p><div class="row"><button class="primary" id="liveStart">▶ 啟動相機</button><button id="liveStop">■ 停止</button><button id="liveTargetPick">🎯 移動 Target</button><button id="liveMixPick">🧪 移動 Your Mix</button><button id="liveLock">🔒 鎖定 Target</button><button id="liveLockMix">🔒 鎖定 Your Mix</button><button id="liveSaveTarget">保存 Target</button><button id="liveSaveMix">保存 Your Mix</button><button id="livePaintPick" class="primary">🎨 移動顏料取色圈</button><button id="liveCapturePaint">📸 鎖定顏料色票</button></div><div class="live-stage" id="liveStage" style="margin-top:10px"><video id="liveVideo" autoplay playsinline muted></video><canvas id="liveOverlay"></canvas></div><div id="livePaintCapture" style="margin:10px 0;padding:12px;border:1px solid #dedbd6;border-radius:12px;background:#faf9f6"><strong>🎨 用相機建立你的實體顏料色票</strong><p style="font-size:13px;color:#666;margin:6px 0">拖曳紫色 P 圓圈到顏料上，按「鎖定顏料色票」，輸入名稱後加入顏料比例。色票會保存到此裝置，並立即用於下方的調色建議。</p><div class="row"><span id="livePaintChip" style="display:inline-block;width:36px;height:36px;border-radius:8px;border:1px solid #aaa;background:#ddd"></span><code id="livePaintHex">—</code><label>名稱 <input id="livePaintName" type="text" placeholder="例如：深胡桃木棕" style="padding:9px;border:1px solid #ccc;border-radius:8px;max-width:180px"></label><button id="liveAddPaint" class="primary">＋ 加入顏料比例</button></div><small id="livePaintStatus" style="color:#666">尚未鎖定顏料色票</small><div id="livePaintLibrary" style="margin-top:8px;font-size:13px"></div></div><p class="live-marker" id="liveStatus">啟動相機後，用滑鼠或手指拖動取色圓圈（需要 HTTPS 或 localhost）。</p><div class="live-grid"><div><strong>🎯 Target</strong><div class="live-swatch" id="liveTargetChip"></div><code id="liveTargetHex">—</code></div><div><strong>🧪 Your Mix</strong><div class="live-swatch" id="liveMixChip"></div><code id="liveMixHex">—</code></div></div><div class="live-result"><strong id="liveDelta">ΔE76 —</strong><div id="liveDirection" style="margin-top:7px"></div><div id="liveSuggestion" style="margin-top:8px"></div><small style="color:#777">顏料建議來自簡化混色模型，僅供調色方向參考，並非精確添加量。</small></div>`;
+tabs.after(root);
+let stream=null,raf=0,mode='target',target=null,mix=null,last=0,dragging=null;
+const locked={target:false,mix:false},positions={target:{x:.25,y:.5},mix:{x:.75,y:.5},paint:{x:.5,y:.75}};let livePaint=null,paintCapture=null;const paintStoreKey='restoreLabLivePaintLibraryV1';
+const video=$('liveVideo'),overlay=$('liveOverlay'),stage=$('liveStage');
+function setTab(which){document.body.classList.toggle('camera-mode',which==='camera');document.body.classList.toggle('practice-mode',which==='practice');$('tabCamera').classList.toggle('active',which==='camera');$('tabPractice').classList.toggle('active',which==='practice');if(which==='practice')stop();try{localStorage.setItem('restoreLabViewMode',which)}catch(e){}}
+$('tabCamera').onclick=()=>setTab('camera');$('tabPractice').onclick=()=>setTab('practice');
+function sample(ctx,w,h,pos){const x=Math.round(pos.x*(w-1)),y=Math.round(pos.y*(h-1)),r=Math.max(3,Math.round(Math.min(w,h)*.012)),sx=Math.max(0,x-r),sy=Math.max(0,y-r),d=ctx.getImageData(sx,sy,Math.min(2*r+1,w-sx),Math.min(2*r+1,h-sy)).data;const c=[[],[],[]];for(let i=0;i<d.length;i+=4){if(d[i+3]<250)continue;for(let j=0;j<3;j++)c[j].push(d[i+j]);}if(!c[0].length)return null;const a=c.map(v=>{v.sort((a,b)=>a-b);return v[v.length>>1]});return {hex:rgbToHex(...a).toUpperCase(),lab:rgbToLab(...a)};}
+function simulate(base,paint,weight){const x=hexToRgb(base),y=hexToRgb(paint);return {r:255*Math.exp((1-weight)*Math.log(Math.max(x.r/255,.001))+weight*Math.log(Math.max(y.r/255,.001))),g:255*Math.exp((1-weight)*Math.log(Math.max(x.g/255,.001))+weight*Math.log(Math.max(y.g/255,.001))),b:255*Math.exp((1-weight)*Math.log(Math.max(x.b/255,.001))+weight*Math.log(Math.max(y.b/255,.001)))};}
+function display(){if(livePaint&&!paintCapture){$('livePaintChip').style.background=livePaint.hex;$('livePaintHex').textContent=livePaint.hex;}if(target){$('liveTargetChip').style.background=target.hex;$('liveTargetHex').textContent=target.hex;}if(mix){$('liveMixChip').style.background=mix.hex;$('liveMixHex').textContent=mix.hex;}if(!target||!mix)return;const de=deltaE76(target.lab,mix.lab);$('liveDelta').textContent=`ΔE76 ${de.toFixed(2)}（相機估算）`;const dl=target.lab.L-mix.lab.L,da=target.lab.a-mix.lab.a,db=target.lab.b-mix.lab.b;$('liveDirection').textContent=`調整方向：${Math.abs(dl)<2?'亮度接近':dl>0?'需要更亮':'需要更暗'}；${Math.abs(da)<2?'紅綠接近':da>0?'需要偏紅':'需要偏綠'}；${Math.abs(db)<2?'黃藍接近':db>0?'需要偏黃':'需要偏藍'}。`;
+const suggestions=[];for(const p of paints){if(!/^#[0-9a-f]{6}$/i.test(p.hex))continue;let best=null;for(const pct of [.01,.02,.05,.1,.2,.3]){const rgb=simulate(mix.hex,p.hex,pct),lab=rgbToLab(rgb.r,rgb.g,rgb.b),err=deltaE76(target.lab,lab);if(!best||err<best.err)best={pct,err};}if(best&&best.err<de-.1)suggestions.push({name:p.name,hex:p.hex,...best});}suggestions.sort((a,b)=>a.err-b.err);$('liveSuggestion').innerHTML='';const lead=document.createElement('strong');lead.textContent=suggestions.length?'現有顏料建議（依實測 Your Mix 模擬）：':'目前顏料庫沒有明顯改善色差的模擬方向。';$('liveSuggestion').append(lead);suggestions.slice(0,4).forEach((p,i)=>{const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px';const chip=document.createElement('span');chip.style.cssText='width:23px;height:23px;border-radius:5px;border:1px solid #bbb;flex-shrink:0';chip.style.background=p.hex;const label=document.createElement('span');label.textContent=`${i+1}. ${p.name} · 試加約 ${(p.pct*100).toFixed(0)}%（模擬 ΔE ${p.err.toFixed(2)}）`;row.append(chip,label);$('liveSuggestion').append(row);});}
+function geometry(){const r=video.getBoundingClientRect(),w=video.videoWidth,h=video.videoHeight;if(!w||!h||!r.width||!r.height)return null;const scale=Math.min(r.width/w,r.height/h);return {r,left:(r.width-w*scale)/2,top:(r.height-h*scale)/2,dw:w*scale,dh:h*scale};}
+function pointAt(e){const g=geometry();if(!g)return null;const x=(e.clientX-g.r.left-g.left)/g.dw,y=(e.clientY-g.r.top-g.top)/g.dh;return {x:Math.max(0,Math.min(1,x)),y:Math.max(0,Math.min(1,y))};}
+function draw(){const g=geometry();if(!g)return;const ratio=window.devicePixelRatio||1;overlay.width=Math.round(g.r.width*ratio);overlay.height=Math.round(g.r.height*ratio);const o=overlay.getContext('2d');o.scale(ratio,ratio);o.strokeStyle='rgba(255,255,255,.85)';o.lineWidth=2;o.setLineDash([7,5]);const mid=g.left+g.dw/2;o.beginPath();o.moveTo(mid,g.top);o.lineTo(mid,g.top+g.dh);o.stroke();o.setLineDash([]);for(const [k,pos] of Object.entries(positions)){const x=g.left+pos.x*g.dw,y=g.top+pos.y*g.dh;o.beginPath();o.arc(x,y,15,0,Math.PI*2);o.fillStyle='rgba(0,0,0,.25)';o.fill();o.lineWidth=3;o.strokeStyle=k==='target'?'#00f5d4':k==='mix'?'#ffb703':'#c084fc';o.stroke();o.fillStyle=o.strokeStyle;o.font='bold 12px system-ui';o.fillText(k==='target'?'T':k==='mix'?'M':'P',x+20,y+4);}}
+function frame(ts){raf=requestAnimationFrame(frame);if(ts-last<250||!video.videoWidth)return;last=ts;const c=document.createElement('canvas');c.width=video.videoWidth;c.height=video.videoHeight;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(video,0,0,c.width,c.height);if(!locked.target)target=sample(ctx,c.width,c.height,positions.target);if(!locked.mix)mix=sample(ctx,c.width,c.height,positions.mix);if(!paintCapture)livePaint=sample(ctx,c.width,c.height,positions.paint);display();draw();}
+function stop(){cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;$('liveStatus').textContent='相機已停止';}
+$('liveStart').onclick=async()=>{stop();try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});video.srcObject=stream;await video.play();$('liveStatus').textContent='拖曳圓圈調整取色位置；鎖定後色票不再變動。';raf=requestAnimationFrame(frame);}catch(e){$('liveStatus').textContent='無法啟動相機：'+e.message;}};
+$('liveStop').onclick=stop;$('livePaintPick').onclick=()=>{mode='paint';$('liveStatus').textContent='拖曳紫色 P 圓圈到要測量的顏料';};$('liveCapturePaint').onclick=()=>{if(paintCapture){paintCapture=null;$('liveCapturePaint').textContent='📸 鎖定顏料色票';$('livePaintStatus').textContent='顏料色票已解鎖，可重新取樣';return;}if(!livePaint){$('livePaintStatus').textContent='請先啟動相機並對準顏料';return;}paintCapture={...livePaint,lab:{...livePaint.lab}};$('liveCapturePaint').textContent='🔓 重新取色';$('livePaintChip').style.background=paintCapture.hex;$('livePaintHex').textContent=paintCapture.hex;$('livePaintStatus').textContent='已鎖定 '+paintCapture.hex+'，輸入名稱後加入顏料比例';};$('liveTargetPick').onclick=()=>{mode='target';$('liveStatus').textContent='請拖曳 Target 青綠色圓圈';};$('liveMixPick').onclick=()=>{mode='mix';$('liveStatus').textContent='請拖曳 Your Mix 橙色圓圈';};
+function lock(k,id,label){locked[k]=!locked[k];$(id).textContent=(locked[k]?'🔓 解除':'🔒 鎖定')+' '+label;$(id).classList.toggle('is-locked',locked[k]);}
+$('liveLock').onclick=()=>lock('target','liveLock','Target');$('liveLockMix').onclick=()=>lock('mix','liveLockMix','Your Mix');
+function renderPaintLibrary(){const saved=paints.filter(p=>p.cameraMeasured);$('livePaintLibrary').textContent=saved.length?'已加入的相機顏料：'+saved.map(p=>p.name+' '+p.hex).join(' · '):'尚未加入相機測量的顏料';}
+function persistPaints(){try{localStorage.setItem(paintStoreKey,JSON.stringify(paints.map(p=>({name:p.name,hex:p.hex,amount:p.amount,base:p.base,baseKey:p.baseKey||null,cameraMeasured:!!p.cameraMeasured}))))}catch(e){$('livePaintStatus').textContent='保存失敗：'+e.message;}}
+$('liveAddPaint').onclick=()=>{if(!paintCapture){$('livePaintStatus').textContent='請先按「鎖定顏料色票」再加入';return;}const name=$('livePaintName').value.trim();if(!name){$('livePaintStatus').textContent='請輸入顏料名稱';$('livePaintName').focus();return;}const newPaint={name,hex:paintCapture.hex,amount:0,base:false,cameraMeasured:true};paints.push(newPaint);buildControls();update();persistPaints();renderPaintLibrary();display();$('livePaintStatus').textContent=`已保存「${name}」${newPaint.hex}，並加入顏料比例及調色建議`;paintCapture=null;$('liveCapturePaint').textContent='📸 鎖定顏料色票';$('livePaintName').value='';};
+try{const saved=JSON.parse(localStorage.getItem(paintStoreKey)||'null');if(Array.isArray(saved)){
+ const valid=saved.filter(p=>p&&/^#[0-9a-f]{6}$/i.test(p.hex)).slice(0,150);
+ const hasBase=valid.some(p=>p.base);
+ // Older versions stored the five defaults plus custom colors; newer versions may store zero defaults.
+ // In either case, the saved array is authoritative, including deliberate deletions.
+ paints.splice(0,paints.length,...valid.map(p=>({name:String(p.name||'顏料'),hex:p.hex.toUpperCase(),amount:Math.max(0,Number(p.amount)||0),base:!!p.base,baseKey:p.baseKey||(p.base?({Red:'red',Yellow:'yellow',Blue:'blue',White:'white',Black:'black',紅:'red',黃:'yellow',藍:'blue',白:'white',黑:'black',红:'red',黄:'yellow',蓝:'blue'}[p.name]||null):null),cameraMeasured:!!p.cameraMeasured})));
+ paints.forEach(p=>{if(p.base)p.name=basePaintName(p)});
+ buildControls();update();
+}}catch(e){}renderPaintLibrary();
+const originalAdd=window.addPaint,originalRemove=window.removePaint,originalPaintColor=window.setPaintColor,originalPaintHex=window.setPaintHex,originalPaintName=window.setPaintName;window.addPaint=function(...a){const v=originalAdd(...a);persistPaints();return v};window.removePaint=function(...a){const v=originalRemove(...a);persistPaints();renderPaintLibrary();return v};window.setPaintColor=function(...a){const v=originalPaintColor(...a);persistPaints();return v};window.setPaintHex=function(...a){const v=originalPaintHex(...a);persistPaints();return v};window.setPaintName=function(...a){const v=originalPaintName(...a);persistPaints();renderPaintLibrary();return v};
+stage.addEventListener('pointerdown',e=>{if(!video.videoWidth)return;const g=geometry(),p=pointAt(e);if(!g||!p)return;const dist=k=>Math.hypot((p.x-positions[k].x)*g.dw,(p.y-positions[k].y)*g.dh);const candidates=['target','mix','paint'].map(k=>({k,d:dist(k)})).sort((a,b)=>a.d-b.d);dragging=candidates[0].d<45?candidates[0].k:mode;mode=dragging;positions[dragging]=p;if(dragging==='paint'&&paintCapture){paintCapture=null;$('liveCapturePaint').textContent='📸 鎖定顏料色票';}stage.setPointerCapture(e.pointerId);draw();});
+stage.addEventListener('pointermove',e=>{if(!dragging)return;const p=pointAt(e);if(p){positions[dragging]=p;draw();}});for(const evt of ['pointerup','pointercancel','lostpointercapture'])stage.addEventListener(evt,()=>{dragging=null;});
+$('liveSaveTarget').onclick=()=>{if(!target)return alert('請先取色');setTargetHex(target.hex,true);$('liveStatus').textContent='Target 已保存到原本欄位';};
+$('liveSaveMix').onclick=()=>{if(!mix)return alert('請先取色');const key='restoreLabCameraColorsV1';let records=[];try{records=JSON.parse(localStorage.getItem(key)||'[]')}catch(e){}if(!Array.isArray(records))records=[];records.unshift({id:Date.now()+'-live',name:'Live Your Mix',hex:mix.hex,lab:mix.lab,kind:'current',created:new Date().toISOString()});try{localStorage.setItem(key,JSON.stringify(records));$('liveStatus').textContent='Your Mix 已保存到取色紀錄';}catch(e){alert('儲存失敗：'+e.message);}};
+window.addEventListener('pagehide',stop);setTab(localStorage.getItem('restoreLabViewMode')==='camera'?'camera':'practice');
+})();
 </script>
 </body>
 </html>
